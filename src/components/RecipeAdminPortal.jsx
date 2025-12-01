@@ -6,6 +6,7 @@ import {
   List, Clock, Zap, Database, Globe, X, Image, CookingPot, Users, Gauge, Dot, 
   ListOrdered 
 } from 'lucide-react';
+//Backend integration
 const BASE_URL = process.env.REACT_APP_API_BASE_URL;
 
 const RecipeAdminPortal = () => {
