@@ -6,7 +6,7 @@ import {
   List, Clock, Zap, Database, Globe, X, Image, CookingPot, Users, Gauge, Dot, 
   ListOrdered 
 } from 'lucide-react';
-const BASE_URL = 'http://localhost:5000';
+const BASE_URL = process.env.REACT_APP_API_BASE_URL;
 
 const RecipeAdminPortal = () => {
   const [recipes, setRecipes] = useState([]); 
