@@ -41,14 +41,8 @@ const RecipeAdminPortal = () => {
 
   const [formData, setFormData] = useState({
     name: '',
-    category: '',
     ingredients: '',
     instructions: '',
-    prepTime: '',
-    cookTime: '',
-    servings: '',
-    difficulty: 'Medium',
-    image: '',
     source: 'database'
   });
 
@@ -58,6 +52,12 @@ const RecipeAdminPortal = () => {
     }
     fetchRecipesForStats();
   }, [currentView, currentPage, searchQuery, filterCategory]);
+
+  useEffect(() => {
+  if (currentView === 'dashboard') {
+    fetchRecipesForStats();
+  }
+}, [currentView]);
 
   const fetchPagedRecipes = async () => {
     setIsLoading(true);
@@ -212,29 +212,41 @@ const RecipeAdminPortal = () => {
     }
   };
 
-  const handleUpdateRecipe = async () => {
-    setIsLoading(true);
-    try {
-      const response = await fetch(`${BASE_URL}/api/recipes/${selectedRecipe.id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(formData)
-      });
-      
-      if (!response.ok) throw new Error('Failed to update recipe');
-      
-      await fetchPagedRecipes();
-      await fetchRecipesForStats();
-      resetForm();
-      setCurrentView('recipes');
-      showNotification('Recipe updated successfully', 'success');
-    } catch (error) {
-      console.error('Error updating recipe:', error);
-      showNotification('Failed to update recipe', 'error');
-    } finally {
-      setIsLoading(false);
-    }
-  };
+ const handleUpdateRecipe = async () => {
+  setIsLoading(true);
+  try {
+    const recipeId = selectedRecipe._id || selectedRecipe.id;
+    const payload = {
+      title: formData.name,
+      ingredients: formData.ingredients.split(',').map(i => i.trim()),
+      instructions: formData.instructions,
+      source: formData.source
+    };
+
+    const response = await fetch(`${BASE_URL}/api/recipes/${recipeId}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+
+    const result = await response.json();
+    console.log('Update response:', result);
+
+    if (!response.ok) throw new Error(result.message || 'Failed to update recipe');
+
+    await fetchPagedRecipes();
+    await fetchRecipesForStats();
+    resetForm();
+    setCurrentView('recipes');
+    showNotification('Recipe updated successfully', 'success');
+  } catch (error) {
+    console.error('Error updating recipe:', error);
+    showNotification('Failed to update recipe: ' + error.message, 'error');
+  } finally {
+    setIsLoading(false);
+  }
+};
+
 
   const handleDeleteRecipe = async (id) => {
     if (!window.confirm('Are you sure you want to delete this recipe?')) return;
@@ -345,14 +357,8 @@ const RecipeAdminPortal = () => {
   const resetForm = () => {
     setFormData({
       name: '',
-      category: '',
       ingredients: '',
       instructions: '',
-      prepTime: '',
-      cookTime: '',
-      servings: '',
-      difficulty: 'Medium',
-      image: '',
       source: 'database'
     });
     setSelectedRecipe(null);
@@ -421,14 +427,20 @@ const RecipeAdminPortal = () => {
 
       <div className="max-w-7xl mx-auto px-6 py-6">
         <nav className="flex gap-2 mb-6">
-          <button
-            onClick={() => setCurrentView('dashboard')}
-            className={`px-4 py-2 rounded-lg font-medium ${
-              currentView === 'dashboard' ? 'bg-blue-500 text-white' : 'bg-white text-gray-700 hover:bg-gray-50'
-            }`}
-          >
-            Dashboard
-          </button>
+         <button
+  onClick={() => {
+    setCurrentView('dashboard');
+    fetchRecipesForStats();   // ✅ FIXED
+  }}
+  className={`px-4 py-2 rounded-lg font-medium ${
+    currentView === 'dashboard'
+      ? 'bg-blue-500 text-white'
+      : 'bg-white text-gray-700 hover:bg-gray-50'
+  }`}
+>
+  Dashboard
+</button>
+
           <button
             onClick={() => { 
               setCurrentView('recipes'); 
@@ -725,69 +737,6 @@ const RecipeAdminPortal = () => {
             />
           </div>
           
-          {/* 2. Category */}
-          <div>
-            <label className="block text-sm font-semibold text-gray-700 mb-2">Category <span className="text-red-500">*</span></label>
-            <input
-              type="text"
-              required
-              value={formData.category}
-              onChange={(e) => setFormData({ ...formData, category: e.target.value })}
-              className="w-full px-4 py-2.5 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-pink-500 focus:border-pink-500 transition duration-150"
-            />
-          </div>
-          
-          {/* 3. Prep Time */}
-          <div>
-            <label className="block text-sm font-semibold text-gray-700 mb-2">Prep Time (minutes) <span className="text-red-500">*</span></label>
-            <input
-              type="number"
-              required
-              value={formData.prepTime}
-              onChange={(e) => setFormData({ ...formData, prepTime: e.target.value })}
-              className="w-full px-4 py-2.5 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-pink-500 focus:border-pink-500 transition duration-150"
-            />
-          </div>
-          
-          {/* 4. Cook Time */}
-          <div>
-            <label className="block text-sm font-semibold text-gray-700 mb-2">Cook Time (minutes) <span className="text-red-500">*</span></label>
-            <input
-              type="number"
-              required
-              value={formData.cookTime}
-              onChange={(e) => setFormData({ ...formData, cookTime: e.target.value })}
-              className="w-full px-4 py-2.5 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-pink-500 focus:border-pink-500 transition duration-150"
-            />
-          </div>
-          
-          {/* 5. Servings */}
-          <div>
-            <label className="block text-sm font-semibold text-gray-700 mb-2">Servings <span className="text-red-500">*</span></label>
-            <input
-              type="number"
-              required
-              value={formData.servings}
-              onChange={(e) => setFormData({ ...formData, servings: e.target.value })}
-              className="w-full px-4 py-2.5 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-pink-500 focus:border-pink-500 transition duration-150"
-            />
-          </div>
-          
-          {/* 6. Difficulty */}
-          <div>
-            <label className="block text-sm font-semibold text-gray-700 mb-2">Difficulty <span className="text-red-500">*</span></label>
-            <select
-              required
-              value={formData.difficulty}
-              onChange={(e) => setFormData({ ...formData, difficulty: e.target.value })}
-              className="w-full px-4 py-2.5 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-pink-500 focus:border-pink-500 transition duration-150 bg-white appearance-none"
-            >
-              <option value="Easy">Easy</option>
-              <option value="Medium">Medium</option>
-              <option value="Hard">Hard</option>
-            </select>
-          </div>
-          
           {/* 7. Source */}
           <div>
             <label className="block text-sm font-semibold text-gray-700 mb-2">Source <span className="text-red-500">*</span></label>
@@ -800,17 +749,6 @@ const RecipeAdminPortal = () => {
               <option value="database">Database</option>
               <option value="api">API</option>
             </select>
-          </div>
-          
-          {/* 8. Image URL */}
-          <div>
-            <label className="block text-sm font-semibold text-gray-700 mb-2">Image URL (Optional)</label>
-            <input
-              type="text"
-              value={formData.image}
-              onChange={(e) => setFormData({ ...formData, image: e.target.value })}
-              className="w-full px-4 py-2.5 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-pink-500 focus:border-pink-500 transition duration-150"
-            />
           </div>
           
           {/* 9. Ingredients (Full Width) */}
@@ -861,28 +799,10 @@ const RecipeAdminPortal = () => {
     </div>
   </div>
 )}
-       {currentView === 'view' && selectedRecipe && (
-  // Use a soft background for the page container
+{currentView === 'view' && selectedRecipe && (
   <div className="p-8 bg-gray-50 min-h-screen-minus-header">
-    
     <div className="bg-white rounded-xl shadow-2xl border border-gray-100 max-w-5xl mx-auto overflow-hidden">
       
-      {/* RECIPE IMAGE SECTION */}
-      {selectedRecipe.image ? (
-        <div className="h-80 w-full bg-gray-200 overflow-hidden">
-          <img 
-            src={selectedRecipe.image} 
-            alt={selectedRecipe.name || 'Recipe Image'} 
-            className="w-full h-full object-cover transition-transform duration-300 hover:scale-[1.03]" 
-          />
-        </div>
-      ) : (
-        <div className="h-64 flex items-center justify-center bg-gray-100 text-gray-400">
-          <Image size={48} />
-          <span className="ml-3 text-lg font-medium">No Image Available</span>
-        </div>
-      )}
-
       {/* RECIPE CONTENT & DETAILS */}
       <div className="p-8">
         
@@ -902,48 +822,7 @@ const RecipeAdminPortal = () => {
         
         {/* METADATA STRIP (Prep, Cook, Servings, Difficulty) */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-10">
-          
-          {/* Prep Time */}
-          <div className="bg-white border border-pink-100 p-4 rounded-xl shadow-md flex items-center">
-            <Clock size={24} className="text-pink-600 mr-3" />
-            <div>
-              <div className="text-xs uppercase text-pink-600 font-bold">Prep Time</div>
-              <div className="text-xl font-bold text-gray-800">{selectedRecipe.prepTime || 'N/A'} <span className="text-base font-medium text-gray-600">min</span></div>
-            </div>
-          </div>
-          
-          {/* Cook Time */}
-          <div className="bg-white border border-pink-100 p-4 rounded-xl shadow-md flex items-center">
-            <CookingPot size={24} className="text-pink-600 mr-3" />
-            <div>
-              <div className="text-xs uppercase text-pink-600 font-bold">Cook Time</div>
-              <div className="text-xl font-bold text-gray-800">{selectedRecipe.cookTime || 'N/A'} <span className="text-base font-medium text-gray-600">min</span></div>
-            </div>
-          </div>
-          
-          {/* Servings */}
-          <div className="bg-white border border-pink-100 p-4 rounded-xl shadow-md flex items-center">
-            <Users size={24} className="text-pink-600 mr-3" />
-            <div>
-              <div className="text-xs uppercase text-pink-600 font-bold">Servings</div>
-              <div className="text-xl font-bold text-gray-800">{selectedRecipe.servings || 'N/A'}</div>
-            </div>
-          </div>
-          
-          {/* Difficulty (Badge style for consistency) */}
-          <div className="bg-white border border-pink-100 p-4 rounded-xl shadow-md flex items-center">
-            <Gauge size={24} className="text-pink-600 mr-3" />
-            <div>
-              <div className="text-xs uppercase text-pink-600 font-bold">Difficulty</div>
-              <span className={`mt-0.5 inline-block px-3 py-1 text-xs font-bold rounded-full ${
-                selectedRecipe.difficulty === 'Easy' ? 'bg-emerald-100 text-emerald-700' :
-                selectedRecipe.difficulty === 'Medium' ? 'bg-amber-100 text-amber-700' :
-                'bg-red-100 text-red-700'
-              }`}>
-                {selectedRecipe.difficulty || 'N/A'}
-              </span>
-            </div>
-          </div>
+          {/* You can add prep/cook/servings/difficulty badges here if needed */}
         </div>
         
         {/* INGREDIENTS SECTION */}
@@ -954,7 +833,6 @@ const RecipeAdminPortal = () => {
           {(() => {
             try {
               let ingredientsList = [];
-              // Logic to handle different ingredient formats (string/array/object)
               if (Array.isArray(selectedRecipe.ingredients)) {
                 ingredientsList = selectedRecipe.ingredients;
               } else if (typeof selectedRecipe.ingredients === 'string' && selectedRecipe.ingredients.trim()) {
@@ -970,7 +848,6 @@ const RecipeAdminPortal = () => {
               }
               
               return (
-                // Use a two-column layout for longer lists
                 <ul className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-2 list-none p-0">
                   {filteredIngredients.map((ing, i) => (
                     <li key={i} className="text-gray-700 flex items-start">
@@ -991,7 +868,6 @@ const RecipeAdminPortal = () => {
           <h3 className="font-extrabold text-2xl text-gray-800 mb-4 flex items-center gap-2">
             <ListOrdered size={24} className="text-pink-600" /> Instructions
           </h3>
-          {/* Using text-base for better readability */}
           <p className="text-base text-gray-700 whitespace-pre-line leading-relaxed">
             {selectedRecipe.instructions || 'No detailed instructions available.'}
           </p>
@@ -1017,6 +893,7 @@ const RecipeAdminPortal = () => {
     </div>
   </div>
 )}
+
  </div>
   </div>
   );
