@@ -1,12 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { 
-  // All necessary icons for the application
   Search, Plus, Edit2, Trash2, Eye, Download, RefreshCw, XCircle, CheckCircle, 
   ChevronLeft, ChevronRight, LayoutDashboard, Utensils, BookOpen, PieChart, 
   List, Clock, Zap, Database, Globe, X, Image, CookingPot, Users, Gauge, Dot, 
-  ListOrdered 
+  ListOrdered, LogOut
 } from 'lucide-react';
-//Backend integration
+
 const BASE_URL = process.env.REACT_APP_API_BASE_URL;
 
 const RecipeAdminPortal = () => {
@@ -22,15 +21,40 @@ const RecipeAdminPortal = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [notification, setNotification] = useState(null);
 
-  const getSourceBadge = (source) => { // <-- FIX for Line 438
+  // Get token from localStorage
+  const getToken = () => {
+    return localStorage.getItem('adminToken');
+  };
+
+  // Create headers with token
+  const getAuthHeaders = () => {
+    const token = getToken();
+    return {
+      'Content-Type': 'application/json',
+      ...(token && { 'Authorization': `Bearer ${token}` })
+    };
+  };
+
+  // Check if user is authenticated
+  const isAuthenticated = () => {
+    return !!getToken();
+  };
+
+  // Logout function
+  const handleLogout = () => {
+    localStorage.removeItem('adminToken');
+    window.location.href = '/login'; // Redirect to login page
+  };
+
+  const getSourceBadge = (source) => {
     const normalizedSource = source === 'cookbook' ? 'Database' : source.charAt(0).toUpperCase() + source.slice(1);
     const isDatabase = normalizedSource === 'Database';
     const classes = `px-3 py-1.5 rounded-full text-xs font-semibold flex items-center gap-1 whitespace-nowrap ${
-        isDatabase ? 'bg-indigo-100 text-indigo-700 border border-indigo-200' : 'bg-purple-100 text-purple-700 border border-purple-200'
+        isDatabase ? 'bg-purple-100 text-purple-700 border border-purple-200' : 'bg-indigo-100 text-indigo-700 border border-indigo-200'
     }`;
-    const Icon = isDatabase ? Database : Zap; // NOTE: 'Database' and 'Zap' icons must also be imported
+    const Icon = isDatabase ? Database : Zap;
     return <span className={classes}><Icon size={12} /> {normalizedSource}</span>;
-};
+  };
   
   const [stats, setStats] = useState({
     total: 0,
@@ -43,7 +67,7 @@ const RecipeAdminPortal = () => {
     name: '',
     ingredients: '',
     instructions: '',
-    source: 'database'
+    source: 'cookbook'
   });
 
   useEffect(() => {
@@ -54,14 +78,13 @@ const RecipeAdminPortal = () => {
   }, [currentView, currentPage, searchQuery, filterCategory]);
 
   useEffect(() => {
-  if (currentView === 'dashboard') {
-    fetchRecipesForStats();
-  }
-}, [currentView]);
+    if (currentView === 'dashboard') {
+      fetchRecipesForStats();
+    }
+  }, [currentView]);
 
   const fetchPagedRecipes = async () => {
     setIsLoading(true);
-    console.log('=== fetchPagedRecipes called ===');
     try {
       const params = new URLSearchParams({
         page: currentPage,
@@ -71,8 +94,6 @@ const RecipeAdminPortal = () => {
       });
 
       const url = `${BASE_URL}/api/recipes?${params.toString()}`;
-      console.log('Fetching URL:', url);
-
       const response = await fetch(url);
       
       if (!response.ok) {
@@ -80,32 +101,17 @@ const RecipeAdminPortal = () => {
       }
 
       const data = await response.json();
-      console.log('Response data:', data);
-      console.log('First recipe raw:', data.recipes[0]);
-      console.log('All fields in first recipe:', Object.keys(data.recipes[0] || {}));
 
       if (!data.recipes || !Array.isArray(data.recipes)) {
-        console.error('Unexpected response format:', data);
         throw new Error('Invalid response format from server');
       }
 
-      const normalized = data.recipes.map(r => {
-        const norm = { 
-          ...r, 
-          id: r._id || r.id,
-          name: r.title || r.name || r.recipe_name || r.recipeName,
-          title: r.title || r.name || r.recipe_name || r.recipeName
-        };
-        console.log('Normalizing recipe:', { 
-          rawFields: Object.keys(r),
-          originalTitle: r.title, 
-          originalName: r.name,
-          normalized: norm.name 
-        });
-        return norm;
-      });
-      console.log('Normalized recipes:', normalized.length);
-      console.log('First normalized recipe:', normalized[0]);
+      const normalized = data.recipes.map(r => ({ 
+        ...r, 
+        id: r._id || r.id,
+        name: r.title || r.name || r.recipe_name || r.recipeName,
+        title: r.title || r.name || r.recipe_name || r.recipeName
+      }));
       
       setPagedRecipes(normalized);
       setTotalRecipesCount(data.totalCount);
@@ -119,11 +125,8 @@ const RecipeAdminPortal = () => {
   };
 
   const fetchRecipesForStats = async () => {
-    console.log('=== fetchRecipesForStats called ===');
     try {
       const url = `${BASE_URL}/api/recipes/stats`;
-      console.log('Fetching stats from:', url);
-      
       const response = await fetch(url);
       
       if (!response.ok) {
@@ -131,10 +134,8 @@ const RecipeAdminPortal = () => {
       }
       
       const data = await response.json();
-      console.log('Stats data received:', data.length, 'recipes');
       
       if (!Array.isArray(data)) {
-        console.error('Expected array, got:', typeof data);
         throw new Error('Invalid stats response format');
       }
       
@@ -188,102 +189,171 @@ const RecipeAdminPortal = () => {
     setCurrentPage(1);
   };
 
-  const handleAddRecipe = async () => {
-    setIsLoading(true);
-    try {
-      const response = await fetch(`${BASE_URL}/api/recipes`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(formData)
-      });
-      
-      if (!response.ok) throw new Error('Failed to add recipe');
-      
-      await fetchPagedRecipes();
-      await fetchRecipesForStats();
-      resetForm();
-      setCurrentView('recipes');
-      showNotification('Recipe added successfully', 'success');
-    } catch (error) {
-      console.error('Error adding recipe:', error);
-      showNotification('Failed to add recipe', 'error');
-    } finally {
-      setIsLoading(false);
-    }
-  };
+const handleAddRecipe = async () => {
+  if (!isAuthenticated()) {
+    showNotification('Please login first', 'error');
+    return;
+  }
 
- const handleUpdateRecipe = async () => {
+  // Validate required fields
+  if (!formData.name || !formData.ingredients || !formData.instructions) {
+    showNotification('Please fill in all required fields (Name, Ingredients, Instructions)', 'error');
+    return;
+  }
+
   setIsLoading(true);
   try {
-    const recipeId = selectedRecipe._id || selectedRecipe.id;
     const payload = {
-      title: formData.name,
-      ingredients: formData.ingredients.split(',').map(i => i.trim()),
-      instructions: formData.instructions,
-      source: formData.source
+      title: formData.name.trim(),
+      ingredients: formData.ingredients.split(',').map(i => i.trim()).filter(i => i),
+      instructions: formData.instructions.split('\n').map(i => i.trim()).filter(i => i),
+      dietType: formData.dietType?.trim() || '',
+      cuisine: formData.cuisine?.trim() || '',
+      calories: Number(formData.calories) || 0,
+      source: formData.source || 'cookbook'
     };
 
-    const response = await fetch(`${BASE_URL}/api/recipes/${recipeId}`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
+    console.log('=== DEBUG: Recipe Creation ===');
+    console.log('1. Base URL:', BASE_URL);
+    console.log('2. Full URL:', `${BASE_URL}/api/recipes`);
+    console.log('3. Auth Token:', getToken() ? 'Present (length: ' + getToken().length + ')' : 'MISSING');
+    console.log('4. Payload:', JSON.stringify(payload, null, 2));
+    console.log('5. Headers:', getAuthHeaders());
+
+    const response = await fetch(`${BASE_URL}/api/recipes`, {
+      method: 'POST',
+      headers: getAuthHeaders(),
       body: JSON.stringify(payload)
     });
 
-    const result = await response.json();
-    console.log('Update response:', result);
+    console.log('6. Response Status:', response.status);
+    console.log('7. Response OK:', response.ok);
 
-    if (!response.ok) throw new Error(result.message || 'Failed to update recipe');
+    if (!response.ok) {
+      let errorMessage = 'Failed to add recipe';
+      let errorDetails = null;
+      
+      try {
+        const errorData = await response.json();
+        console.log('8. Error Response (JSON):', errorData);
+        errorDetails = errorData;
+        errorMessage = errorData.message || errorData.error || JSON.stringify(errorData);
+      } catch (e) {
+        const errorText = await response.text();
+        console.log('8. Error Response (TEXT):', errorText);
+        errorMessage = errorText || `Server error (${response.status})`;
+      }
+      
+      // Log full error details
+      console.error('=== FULL ERROR DETAILS ===');
+      console.error('Status:', response.status);
+      console.error('Status Text:', response.statusText);
+      console.error('Error Message:', errorMessage);
+      console.error('Error Details:', errorDetails);
+      
+      throw new Error(errorMessage);
+    }
+
+    const result = await response.json();
+    console.log('9. Success! Recipe created:', result);
 
     await fetchPagedRecipes();
     await fetchRecipesForStats();
     resetForm();
     setCurrentView('recipes');
-    showNotification('Recipe updated successfully', 'success');
+    showNotification('Recipe added successfully', 'success');
   } catch (error) {
-    console.error('Error updating recipe:', error);
-    showNotification('Failed to update recipe: ' + error.message, 'error');
+    console.error('=== CATCH BLOCK ERROR ===');
+    console.error('Error object:', error);
+    console.error('Error message:', error.message);
+    console.error('Error stack:', error.stack);
+    showNotification(error.message || 'Failed to add recipe', 'error');
   } finally {
     setIsLoading(false);
   }
 };
 
+  const handleUpdateRecipe = async () => {
+    if (!isAuthenticated()) {
+      showNotification('Please login first', 'error');
+      return;
+    }
+
+    setIsLoading(true);
+    try {
+      const recipeId = selectedRecipe._id || selectedRecipe.id;
+      const payload = {
+        title: formData.name,
+        ingredients: formData.ingredients.split(',').map(i => i.trim()),
+        instructions: formData.instructions,
+        source: formData.source
+      };
+
+      const response = await fetch(`${BASE_URL}/api/recipes/${recipeId}`, {
+        method: 'PUT',
+        headers: getAuthHeaders(),
+        body: JSON.stringify(payload)
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.message || 'Failed to update recipe');
+      }
+
+      await fetchPagedRecipes();
+      await fetchRecipesForStats();
+      resetForm();
+      setCurrentView('recipes');
+      showNotification('Recipe updated successfully', 'success');
+    } catch (error) {
+      console.error('Error updating recipe:', error);
+      showNotification(error.message || 'Failed to update recipe', 'error');
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   const handleDeleteRecipe = async (id) => {
+    if (!isAuthenticated()) {
+      showNotification('Please login first', 'error');
+      return;
+    }
+
     if (!window.confirm('Are you sure you want to delete this recipe?')) return;
+    
     setIsLoading(true);
     try {
       const response = await fetch(`${BASE_URL}/api/recipes/${id}`, {
-        method: 'DELETE'
+        method: 'DELETE',
+        headers: getAuthHeaders()
       });
       
-      if (!response.ok) throw new Error('Failed to delete recipe');
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || 'Failed to delete recipe');
+      }
       
       await fetchPagedRecipes();
       await fetchRecipesForStats();
       showNotification('Recipe deleted successfully', 'success');
     } catch (error) {
       console.error('Error deleting recipe:', error);
-      showNotification('Failed to delete recipe', 'error');
+      showNotification(error.message || 'Failed to delete recipe', 'error');
     } finally {
       setIsLoading(false);
     }
   };
 
   const handleEdit = async (recipe) => {
-    console.log('=== Editing Recipe ===');
-    console.log('Recipe data:', recipe);
-    
-    // Normalize the recipe object
     const normalizedRecipe = {
       ...recipe,
       name: recipe.name || recipe.title,
       title: recipe.title || recipe.name
     };
     
-    // If ingredients or instructions are missing, fetch full recipe details
     let fullRecipe = normalizedRecipe;
     if (!normalizedRecipe.ingredients || !normalizedRecipe.instructions) {
-      console.log('Fetching full recipe details for edit...');
       try {
         const response = await fetch(`${BASE_URL}/api/recipes/${recipe.id}`);
         if (response.ok) {
@@ -294,7 +364,6 @@ const RecipeAdminPortal = () => {
             name: fetchedRecipe.name || fetchedRecipe.title,
             title: fetchedRecipe.title || fetchedRecipe.name
           };
-          console.log('Full recipe fetched for edit:', fullRecipe);
         }
       } catch (error) {
         console.error('Error fetching full recipe for edit:', error);
@@ -313,53 +382,45 @@ const RecipeAdminPortal = () => {
   };
 
   const handleView = async (recipe) => {
-  console.log('=== Viewing Recipe ===');
-
-  const normalizedRecipe = {
-    ...recipe,
-    name: recipe.name || recipe.title,
-    title: recipe.title || recipe.name
-  };
-  
-  if (!normalizedRecipe.ingredients || !normalizedRecipe.instructions) {
-    try {
-      const response = await fetch(`${BASE_URL}/api/recipes/${recipe.id}`);
-      if (response.ok) {
-        const fullRecipe = await response.json();
-        const normalized = {
-          ...fullRecipe,
-          id: fullRecipe._id || fullRecipe.id,
-          name: fullRecipe.name || fullRecipe.title,
-          title: fullRecipe.title || fullRecipe.name
-        };
-        
-        setSelectedRecipe(normalized);
-        setCurrentView('view');
-
-        // 🔥 FIX: Update recent recipes on dashboard
-        await fetchRecipesForStats();
-
-        return;
+    const normalizedRecipe = {
+      ...recipe,
+      name: recipe.name || recipe.title,
+      title: recipe.title || recipe.name
+    };
+    
+    if (!normalizedRecipe.ingredients || !normalizedRecipe.instructions) {
+      try {
+        const response = await fetch(`${BASE_URL}/api/recipes/${recipe.id}`);
+        if (response.ok) {
+          const fullRecipe = await response.json();
+          const normalized = {
+            ...fullRecipe,
+            id: fullRecipe._id || fullRecipe.id,
+            name: fullRecipe.name || fullRecipe.title,
+            title: fullRecipe.title || fullRecipe.name
+          };
+          
+          setSelectedRecipe(normalized);
+          setCurrentView('view');
+          await fetchRecipesForStats();
+          return;
+        }
+      } catch (error) {
+        console.error('Error fetching full recipe:', error);
       }
-    } catch (error) {
-      console.error('Error fetching full recipe:', error);
     }
-  }
 
-  setSelectedRecipe(normalizedRecipe);
-  setCurrentView('view');
-
-  // 🔥 FIX: Update recent recipes on dashboard
-  await fetchRecipesForStats();
-};
-
+    setSelectedRecipe(normalizedRecipe);
+    setCurrentView('view');
+    await fetchRecipesForStats();
+  };
 
   const resetForm = () => {
     setFormData({
       name: '',
       ingredients: '',
       instructions: '',
-      source: 'database'
+      source: 'cookbook'
     });
     setSelectedRecipe(null);
   };
@@ -378,308 +439,299 @@ const RecipeAdminPortal = () => {
   const categories = [...new Set(recipes.map(r => r.category))];
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-gradient-to-br from-purple-50 via-pink-50 to-purple-100">
       {notification && (
-        <div className={`fixed top-4 right-4 z-50 px-6 py-3 rounded-lg shadow-lg flex items-center gap-2 ${
-          notification.type === 'success' ? 'bg-green-500' : 'bg-red-500'
-        } text-white`}>
+        <div className={`fixed top-4 right-4 z-50 px-6 py-3 rounded-2xl shadow-2xl flex items-center gap-2 ${
+          notification.type === 'success' ? 'bg-gradient-to-r from-purple-500 to-purple-600' : 'bg-gradient-to-r from-red-500 to-red-600'
+        } text-white backdrop-blur-sm border border-white/20`}>
           {notification.type === 'success' ? <CheckCircle size={20} /> : <XCircle size={20} />}
           {notification.message}
         </div>
       )}
-<header className="bg-white shadow-xl border-b border-gray-100 sticky top-0 z-10">
-  <div className="max-w-7xl mx-auto px-6 py-4 flex justify-between items-center">
-    
-    {/* 🍱 LOGO/BRANDING SECTION - Now acts as the primary navigation anchor/Home */}
-    <div className="flex items-center gap-3 cursor-pointer" onClick={() => setCurrentView('recipes')}>
-      <Utensils size={32} className="text-pink-600" /> 
-      <div>
-        <h1 className="text-3xl font-extrabold text-gray-900 tracking-tight">
-          Recipe Admin Portal
-        </h1>
-        <p className="text-sm text-gray-500 mt-0.5">Manage your recipe data and API integrations</p>
-      </div>
-    </div>
-    
-    {/* 🚀 UTILITY ACTIONS */}
-    <div className="flex items-center gap-4">
-      
-      {/* Utility: Refresh Data */}
-      <button 
-        onClick={() => { fetchPagedRecipes(); fetchRecipesForStats(); }} 
-        className="px-3 py-2 text-gray-700 hover:bg-gray-100 rounded-lg transition duration-150 flex items-center gap-2 border border-gray-200"
-        title="Refresh All Data"
-      >
-        <RefreshCw size={18} />
-      </button>
-      
-      {/* Utility: Export Data - Primary action style maintained */}
-      <button 
-        onClick={exportData} 
-        className="px-3 py-2 bg-gray-700 text-white font-medium rounded-lg hover:bg-gray-800 transition duration-150 flex items-center gap-2 shadow-md"
-        title="Export Data"
-      >
-        <Download size={18} /> Export
-      </button>
-    </div>
-  </div>
-</header>
+
+      <header className="bg-white/90 backdrop-blur-lg shadow-2xl border-b border-purple-100 sticky top-0 z-10">
+        <div className="max-w-7xl mx-auto px-6 py-4 flex justify-between items-center">
+          <div className="flex items-center gap-3 cursor-pointer" onClick={() => setCurrentView('recipes')}>
+            <div className="p-2 bg-gradient-to-br from-purple-500 to-pink-500 rounded-2xl shadow-lg">
+              <Utensils size={28} className="text-white" />
+            </div>
+            <div>
+              <h1 className="text-3xl font-extrabold bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent tracking-tight">
+                Recipe Admin Portal
+              </h1>
+              <p className="text-sm text-gray-600 mt-0.5">Manage your culinary collection with elegance</p>
+            </div>
+          </div>
+          
+          <div className="flex items-center gap-3">
+            <button 
+              onClick={() => { fetchPagedRecipes(); fetchRecipesForStats(); }} 
+              className="px-4 py-2 text-purple-700 hover:bg-purple-50 rounded-xl transition duration-200 flex items-center gap-2 border border-purple-200 shadow-sm"
+              title="Refresh All Data"
+            >
+              <RefreshCw size={18} />
+            </button>
+            
+            <button 
+              onClick={exportData} 
+              className="px-5 py-2 bg-gradient-to-r from-purple-600 to-pink-600 text-white font-semibold rounded-xl hover:shadow-xl transition duration-200 flex items-center gap-2 shadow-lg"
+              title="Export Data"
+            >
+              <Download size={18} /> Export
+            </button>
+
+            <button 
+              onClick={handleLogout} 
+              className="px-5 py-2 bg-red-600 text-white font-semibold rounded-xl hover:bg-red-700 transition duration-200 flex items-center gap-2 shadow-lg"
+              title="Logout"
+            >
+              <LogOut size={18} /> Logout
+            </button>
+          </div>
+        </div>
+      </header>
 
       <div className="max-w-7xl mx-auto px-6 py-6">
         <nav className="flex gap-2 mb-6">
-         <button
-  onClick={() => {
-    setCurrentView('dashboard');
-    fetchRecipesForStats();   // ✅ FIXED
-  }}
-  className={`px-4 py-2 rounded-lg font-medium ${
-    currentView === 'dashboard'
-      ? 'bg-blue-500 text-white'
-      : 'bg-white text-gray-700 hover:bg-gray-50'
-  }`}
->
-  Dashboard
-</button>
+          <button
+            onClick={() => {
+              setCurrentView('dashboard');
+              fetchRecipesForStats();
+            }}
+            className={`px-6 py-3 rounded-xl font-semibold transition-all duration-200 shadow-md ${
+              currentView === 'dashboard'
+                ? 'bg-gradient-to-r from-purple-600 to-pink-600 text-white shadow-lg shadow-purple-500/50'
+                : 'bg-white text-gray-700 hover:bg-purple-50 border border-purple-100'
+            }`}
+          >
+            <LayoutDashboard size={18} className="inline mr-2" />
+            Dashboard
+          </button>
 
           <button
             onClick={() => { 
               setCurrentView('recipes'); 
               setCurrentPage(1);
             }}
-            className={`px-4 py-2 rounded-lg font-medium ${
-              currentView === 'recipes' ? 'bg-blue-500 text-white' : 'bg-white text-gray-700 hover:bg-gray-50'
+            className={`px-6 py-3 rounded-xl font-semibold transition-all duration-200 shadow-md ${
+              currentView === 'recipes' 
+                ? 'bg-gradient-to-r from-purple-600 to-pink-600 text-white shadow-lg shadow-purple-500/50' 
+                : 'bg-white text-gray-700 hover:bg-purple-50 border border-purple-100'
             }`}
           >
+            <BookOpen size={18} className="inline mr-2" />
             All Recipes
           </button>
+
           <button
             onClick={() => { resetForm(); setCurrentView('add'); }}
-            className={`px-4 py-2 rounded-lg font-medium ${
-              currentView === 'add' ? 'bg-blue-500 text-white' : 'bg-white text-gray-700 hover:bg-gray-50'
+            className={`px-6 py-3 rounded-xl font-semibold transition-all duration-200 shadow-md ${
+              currentView === 'add' 
+                ? 'bg-gradient-to-r from-purple-600 to-pink-600 text-white shadow-lg shadow-purple-500/50' 
+                : 'bg-white text-gray-700 hover:bg-purple-50 border border-purple-100'
             }`}
           >
-            <Plus size={16} className="inline mr-2" />
+            <Plus size={18} className="inline mr-2" />
             Add Recipe
           </button>
         </nav>
-{currentView === 'dashboard' && (
-  // Use a main container with proper padding and background for the dashboard view
-  <div className="p-6 bg-gray-50 min-h-screen">
-    <h1 className="text-3xl font-bold text-gray-800 mb-8 flex items-center gap-2">
-        <LayoutDashboard size={28} className="text-indigo-600" /> Dashboard Overview
-    </h1>
 
-    {/* MAIN CONTENT GRID (2 COLUMNS on desktop) */}
-    <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        {currentView === 'dashboard' && (
+          <div className="p-6">
+            <h1 className="text-4xl font-bold bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent mb-8 flex items-center gap-2">
+              <LayoutDashboard size={32} className="text-purple-600" /> Dashboard Overview
+            </h1>
 
-      {/* COLUMN 1: RECIPE SUMMARY STATS (1/3 width on large screens) */}
-      <div className="lg:col-span-1 space-y-6">
-        <h2 className="text-xl font-semibold text-gray-700 mb-2 flex items-center gap-2">
-            <PieChart size={20} className="text-indigo-500"/> Performance Metrics
-        </h2>
-        
-        {/* RECIPE SUMMARY CARDS - Redesigned for better impact */}
-        <div className="space-y-4">
-            
-            {/* Avg Cook Time */}
-            <div className="bg-white p-5 rounded-xl shadow-md border-l-4 border-yellow-500 flex items-center justify-between">
-                <div>
-                    <div className="text-sm font-medium text-gray-500">Avg Cook Time</div>
-                    <div className="text-3xl font-bold text-gray-900 mt-1">
-                        {/* Using optional chaining for safety */}
-                        {stats?.timeBreakdown?.avgCook || 'N/A'}
-                    </div>
-                </div>
-                <Clock size={32} className="text-yellow-400 opacity-70" />
-            </div>
-
-            {/* Database Count */}
-            <div className="bg-white p-5 rounded-xl shadow-md border-l-4 border-green-500 flex items-center justify-between">
-                <div>
-                    <div className="text-sm font-medium text-gray-500">Database Count</div>
-                    <div className="text-3xl font-bold text-gray-900 mt-1">
-                        {stats?.dbRecipes || 0}
-                    </div>
-                </div>
-                <Database size={32} className="text-green-400 opacity-70" />
-            </div>
-
-            {/* API Count */}
-            <div className="bg-white p-5 rounded-xl shadow-md border-l-4 border-purple-500 flex items-center justify-between">
-                <div>
-                    <div className="text-sm font-medium text-gray-500">API Count</div>
-                    <div className="text-3xl font-bold text-gray-900 mt-1">
-                        {stats?.apiRecipes || 0}
-                    </div>
-                </div>
-                <Globe size={32} className="text-purple-400 opacity-70" />
-            </div>
-        </div>
-      </div>
-
-
-      {/* COLUMN 2: RECENT RECIPES LIST (2/3 width on large screens) */}
-      <div className="lg:col-span-2">
-        <div className="bg-white rounded-xl shadow-2xl p-6 border border-gray-100">
-          
-          {/* MODIFIED HEADER: The "View All" button is removed from the div below */}
-          <div className="flex justify-between items-center mb-6 border-b pb-4">
-            <h2 className="text-2xl font-semibold text-gray-800 flex items-center gap-2">
-              <List size={24} className="text-indigo-600" /> Recent Recipes
-            </h2>
-            {/* The "View All" button previously here is now removed. */}
-          </div>
-
-          <div className="space-y-4">
-            {recipes.slice(0, 5).length > 0 ? (
-              recipes.slice(0, 5).map(recipe => (
-                <div 
-                  key={recipe.id} 
-                  className="flex items-center justify-between p-4 bg-white rounded-lg border border-gray-200 hover:bg-indigo-50 hover:shadow-lg transition duration-200 cursor-pointer"
-                >
-                  <div className="flex items-center gap-4">
-                      <Utensils size={20} className="text-indigo-400" />
-                      <div>
-                        <div className="font-semibold text-gray-800">{recipe.name}</div>
-                        <div className="text-xs text-gray-500 mt-0.5">
-                            {recipe.category || 'Uncategorized'}
-                        </div>
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+              <div className="lg:col-span-1 space-y-6">
+                <h2 className="text-xl font-semibold text-gray-700 mb-2 flex items-center gap-2">
+                  <PieChart size={20} className="text-purple-600"/> Performance Metrics
+                </h2>
+                
+                <div className="space-y-4">
+                  <div className="bg-white/80 backdrop-blur-sm p-6 rounded-2xl shadow-xl border border-purple-100 flex items-center justify-between hover:shadow-2xl transition-shadow duration-200">
+                    <div>
+                      <div className="text-sm font-medium text-gray-600">Total Recipes</div>
+                      <div className="text-3xl font-bold bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent mt-1">
+                        {stats.total}
                       </div>
+                    </div>
+                    <div className="p-3 bg-gradient-to-br from-purple-500 to-purple-600 rounded-xl">
+                      <Utensils size={32} className="text-white" />
+                    </div>
                   </div>
-                  
-                  <div className="flex items-center gap-4">
-                    {getSourceBadge(recipe.source || 'database')} 
-                    <button 
-                        onClick={(e) => { e.stopPropagation(); handleView(recipe); }} 
-                        className="text-indigo-600 hover:text-indigo-800 p-2 rounded-full transition bg-indigo-100/50 hover:bg-indigo-100" 
-                        title="View Details"
-                    >
-                      <Eye size={18} />
-                    </button>
+
+                  <div className="bg-white/80 backdrop-blur-sm p-6 rounded-2xl shadow-xl border border-purple-100 flex items-center justify-between hover:shadow-2xl transition-shadow duration-200">
+                    <div>
+                      <div className="text-sm font-medium text-gray-600">Database Count</div>
+                      <div className="text-3xl font-bold bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent mt-1">
+                        {stats.dbRecipes}
+                      </div>
+                    </div>
+                    <div className="p-3 bg-gradient-to-br from-purple-500 to-purple-600 rounded-xl">
+                      <Database size={32} className="text-white" />
+                    </div>
+                  </div>
+
+                  <div className="bg-white/80 backdrop-blur-sm p-6 rounded-2xl shadow-xl border border-purple-100 flex items-center justify-between hover:shadow-2xl transition-shadow duration-200">
+                    <div>
+                      <div className="text-sm font-medium text-gray-600">API Count</div>
+                      <div className="text-3xl font-bold bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent mt-1">
+                        {stats.apiRecipes}
+                      </div>
+                    </div>
+                    <div className="p-3 bg-gradient-to-br from-indigo-500 to-indigo-600 rounded-xl">
+                      <Globe size={32} className="text-white" />
+                    </div>
                   </div>
                 </div>
-              ))
-            ) : (
-              <div className="text-center py-8 text-gray-500 italic bg-gray-50 rounded-lg border border-dashed">
-                  <BookOpen size={24} className="mx-auto mb-2 text-gray-400" />
-                  No recent recipes available. Start by adding a new recipe!
               </div>
-            )}
+
+              <div className="lg:col-span-2">
+                <div className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-2xl p-6 border border-purple-100">
+                  <div className="flex justify-between items-center mb-6 border-b border-purple-100 pb-4">
+                    <h2 className="text-2xl font-semibold text-gray-800 flex items-center gap-2">
+                      <List size={24} className="text-purple-600" /> Recent Recipes
+                    </h2>
+                  </div>
+
+                  <div className="space-y-3">
+                    {recipes.slice(0, 5).length > 0 ? (
+                      recipes.slice(0, 5).map(recipe => (
+                        <div 
+                          key={recipe.id} 
+                          className="flex items-center justify-between p-4 bg-gradient-to-r from-white to-purple-50 rounded-xl border border-purple-100 hover:shadow-lg transition-all duration-200 cursor-pointer"
+                        >
+                          <div className="flex items-center gap-4">
+                            <div className="p-2 bg-gradient-to-br from-purple-400 to-pink-400 rounded-lg">
+                              <Utensils size={20} className="text-white" />
+                            </div>
+                            <div>
+                              <div className="font-semibold text-gray-800">{recipe.name}</div>
+                              <div className="text-xs text-gray-500 mt-0.5">
+                                {recipe.category || 'Uncategorized'}
+                              </div>
+                            </div>
+                          </div>
+                          
+                          <div className="flex items-center gap-4">
+                            {getSourceBadge(recipe.source || 'database')} 
+                            <button 
+                              onClick={(e) => { e.stopPropagation(); handleView(recipe); }} 
+                              className="text-purple-600 hover:text-purple-800 p-2 rounded-full transition bg-purple-100/50 hover:bg-purple-100" 
+                              title="View Details"
+                            >
+                              <Eye size={18} />
+                            </button>
+                          </div>
+                        </div>
+                      ))
+                    ) : (
+                      <div className="text-center py-8 text-gray-500 italic bg-purple-50 rounded-xl border border-dashed border-purple-200">
+                        <BookOpen size={24} className="mx-auto mb-2 text-purple-400" />
+                        No recent recipes available. Start by adding a new recipe!
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
-        </div>
-      </div>
-    </div>
-  </div>
-)}
+        )}
 
         {currentView === 'recipes' && (
-  // Use a softer, consistent background
-  <div className="p-8 bg-gray-50 min-h-screen-minus-header">
-    <h1 className="text-4xl font-extrabold text-gray-900 mb-8 tracking-tight">
-        Recipe Catalog
-    </h1>
+          <div className="p-8">
+            <h1 className="text-4xl font-extrabold bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent mb-8 tracking-tight">
+              Recipe Catalog
+            </h1>
 
-    {/* HEADER BAR: Search and Add Button */}
-    <div className="bg-white rounded-xl shadow-xl border border-gray-100 p-5 mb-8 flex flex-col md:flex-row gap-4 items-center">
-      <div className="flex-1 relative w-full md:w-auto">
-        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={20} />
-        <input
-          type="text"
-          placeholder="Search recipes by name..."
-          value={searchQuery}
-          onChange={(e) => handleFilterChange(setSearchQuery, e.target.value)}
-          // Refined focus ring and border color
-          className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg text-gray-800 focus:outline-none focus:ring-2 focus:ring-pink-500 focus:border-pink-500 transition duration-200 shadow-sm"
-        />
-      </div>
-      
-      <div className="flex gap-3">
-        <button
-          onClick={() => setCurrentView('add')}
-          // Used a slightly brighter, primary action color (e.g., Pink/Rose)
-          className="px-5 py-2.5 bg-pink-600 text-white font-semibold rounded-lg hover:bg-pink-700 transition duration-200 flex items-center gap-2 shadow-lg hover:shadow-xl"
-        >
-          <Plus size={20} /> Add New Recipe
-        </button>
-      </div>
-    </div>
-    
-    {/* RECIPES TABLE CONTAINER */}
-    <div className="bg-white rounded-xl shadow-2xl border border-gray-100 overflow-hidden">
-      {isLoading ? (
-        <div className="text-center p-16 text-xl text-indigo-500 flex items-center justify-center gap-3">
-            <RefreshCw size={24} className="animate-spin text-pink-500" /> Loading recipes, please wait...
-        </div>
-      ) : pagedRecipes.length === 0 ? (
-        <div className="text-center p-16 text-lg text-gray-500">
-            <BookOpen size={40} className="mx-auto mb-4 text-gray-400" />
-            <p className="font-medium">No recipes found matching your criteria.</p>
-            <p className="text-sm mt-1">Try adjusting your search terms or adding a new recipe.</p>
-        </div>
-      ) : (
-        <table className="min-w-full divide-y divide-gray-100">
-          <thead className="bg-gray-50">
-            <tr>
-              <th className="px-6 py-4 text-left text-sm font-bold text-gray-700 uppercase tracking-wider">Name</th>
-              <th className="px-6 py-4 text-left text-sm font-bold text-gray-700 uppercase tracking-wider hidden sm:table-cell">Difficulty</th>
-              <th className="px-6 py-4 text-left text-sm font-bold text-gray-700 uppercase tracking-wider hidden sm:table-cell">Source</th>
-              <th className="px-6 py-4 text-center text-sm font-bold text-gray-700 uppercase tracking-wider">Actions</th>
-            </tr>
-          </thead>
-          <tbody className="bg-white divide-y divide-gray-100">
-            {pagedRecipes.map(recipe => {
-              return (
-                <tr key={recipe.id} className="hover:bg-pink-50 transition duration-150">
-                  <td className="px-6 py-4 whitespace-nowrap font-medium text-gray-900">{recipe.name || recipe.title || 'Untitled'}</td>
-                  
-                  {/* Difficulty Badge - Improved contrast and readability */}
-                  <td className="px-6 py-4 whitespace-nowrap hidden sm:table-cell">
-                    <span className={`px-3 py-1 text-xs font-bold rounded-full ${
-                      recipe.difficulty === 'Easy' ? 'bg-emerald-100 text-emerald-700 border border-emerald-300' :
-                      recipe.difficulty === 'Medium' ? 'bg-amber-100 text-amber-700 border border-amber-300' :
-                      'bg-red-100 text-red-700 border border-red-300'
-                    }`}>
-                      {recipe.difficulty}
-                    </span>
-                  </td>
-                  
-                  {/* Source Badge - Using a cohesive Indigo/Pink palette for database */}
-                  <td className="px-6 py-4 whitespace-nowrap hidden sm:table-cell">
-                    <span className={`px-3 py-1 text-xs font-bold rounded-full ${
-                      recipe.source === 'database' || recipe.source === 'cookbook' ? 'bg-indigo-100 text-indigo-700 border border-indigo-300' : 'bg-purple-100 text-purple-700 border border-purple-300'
-                    }`}>
-                      {recipe.source === 'cookbook' ? 'Database' : recipe.source.toUpperCase()}
-                    </span>
-                  </td>
-                  
-                  {/* Actions - Cleaner hover states */}
-                  <td className="px-6 py-4 whitespace-nowrap text-center">
-                    <div className="flex gap-2 justify-center">
-                      <button onClick={() => handleView(recipe)} className="text-blue-600 hover:text-blue-800 p-2 rounded-full hover:bg-blue-50 transition duration-150" title="View Details">
-                        <Eye size={18} />
-                      </button>
-                      <button onClick={() => handleEdit(recipe)} className="text-green-600 hover:text-green-800 p-2 rounded-full hover:bg-green-50 transition duration-150" title="Edit Recipe">
-                        <Edit2 size={18} />
-                      </button>
-                      <button onClick={() => handleDeleteRecipe(recipe.id)} className="text-red-600 hover:text-red-800 p-2 rounded-full hover:bg-red-50 transition duration-150" title="Delete Recipe">
-                        <Trash2 size={18} />
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      )}
-    </div>
-    
-    {/* PAGINATION BLOCK - Refined Look */}
-    {pagedRecipes.length > 0 && (
-      <div className="flex justify-between items-center bg-white p-5 mt-8 rounded-xl shadow-xl border border-gray-100">
-        <div className="text-base text-gray-600">
-          Showing <span className="font-bold text-gray-800">{((currentPage - 1) * recipesPerPage) + 1}</span> to <span className="font-bold text-gray-800">{Math.min(currentPage * recipesPerPage, totalRecipesCount)}</span> of <span className="font-bold text-gray-800">{totalRecipesCount}</span> total recipes
-        </div>
+            <div className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-2xl border border-purple-100 p-5 mb-8 flex flex-col md:flex-row gap-4 items-center">
+              <div className="flex-1 relative w-full md:w-auto">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-purple-400" size={20} />
+                <input
+                  type="text"
+                  placeholder="Search recipes by name..."
+                  value={searchQuery}
+                  onChange={(e) => handleFilterChange(setSearchQuery, e.target.value)}
+                  className="w-full pl-10 pr-4 py-3 border border-purple-200 rounded-xl text-gray-800 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition duration-200 shadow-sm bg-white"
+                />
+              </div>
+              
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setCurrentView('add')}
+                  className="px-6 py-3 bg-gradient-to-r from-purple-600 to-pink-600 text-white font-semibold rounded-xl hover:shadow-xl transition duration-200 flex items-center gap-2 shadow-lg"
+                >
+                  <Plus size={20} /> Add New Recipe
+                </button>
+              </div>
+            </div>
+            
+            <div className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-2xl border border-purple-100 overflow-hidden">
+              {isLoading ? (
+                <div className="text-center p-16 text-xl text-purple-600 flex items-center justify-center gap-3">
+                  <RefreshCw size={24} className="animate-spin text-purple-600" /> Loading recipes, please wait...
+                </div>
+              ) : pagedRecipes.length === 0 ? (
+                <div className="text-center p-16 text-lg text-gray-500">
+                  <BookOpen size={40} className="mx-auto mb-4 text-purple-400" />
+                  <p className="font-medium">No recipes found matching your criteria.</p>
+                  <p className="text-sm mt-1">Try adjusting your search terms or adding a new recipe.</p>
+                </div>
+              ) : (
+                <table className="min-w-full divide-y divide-purple-100">
+                  <thead className="bg-gradient-to-r from-purple-50 to-pink-50">
+                    <tr>
+                      <th className="px-6 py-4 text-left text-sm font-bold text-purple-900 uppercase tracking-wider">Name</th>
+                      <th className="px-6 py-4 text-left text-sm font-bold text-purple-900 uppercase tracking-wider hidden sm:table-cell">Difficulty</th>
+                      <th className="px-6 py-4 text-left text-sm font-bold text-purple-900 uppercase tracking-wider hidden sm:table-cell">Source</th>
+                      <th className="px-6 py-4 text-center text-sm font-bold text-purple-900 uppercase tracking-wider">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="bg-white divide-y divide-purple-50">
+                    {pagedRecipes.map(recipe => (
+                      <tr key={recipe.id} className="hover:bg-gradient-to-r hover:from-purple-50 hover:to-pink-50 transition duration-150">
+                        <td className="px-6 py-4 whitespace-nowrap font-medium text-gray-900">{recipe.name || recipe.title || 'Untitled'}</td>
+                        
+                        <td className="px-6 py-4 whitespace-nowrap hidden sm:table-cell">
+                          <span className={`px-3 py-1 text-xs font-bold rounded-full ${
+                            recipe.difficulty === 'Easy' ? 'bg-emerald-100 text-emerald-700 border border-emerald-300' :
+                            recipe.difficulty === 'Medium' ? 'bg-amber-100 text-amber-700 border border-amber-300' :
+                            'bg-red-100 text-red-700 border border-red-300'
+                          }`}>
+                            {recipe.difficulty}
+                          </span>
+                        </td>
+                        
+                        <td className="px-6 py-4 whitespace-nowrap hidden sm:table-cell">
+                          {getSourceBadge(recipe.source || 'cookbook')}
+                        </td>
+                        
+                        <td className="px-6 py-4 whitespace-nowrap text-center">
+                          <div className="flex gap-2 justify-center">
+                            <button onClick={() => handleView(recipe)} className="text-purple-600 hover:text-purple-800 p-2 rounded-full hover:bg-purple-100 transition duration-150" title="View Details">
+                              <Eye size={18} />
+                            </button>
+                            <button onClick={() => handleEdit(recipe)} className="text-green-600 hover:text-green-800 p-2 rounded-full hover:bg-green-100 transition duration-150" title="Edit Recipe">
+                              <Edit2 size={18} />
+                            </button>
+                            <button onClick={() => handleDeleteRecipe(recipe.id)} className="text-red-600 hover:text-red-800 p-2 rounded-full hover:bg-red-100 transition duration-150" title="Delete Recipe">
+                              <Trash2 size={18} />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
+            
+            {pagedRecipes.length > 0 && (
+              <div className="flex justify-between items-center bg-white/80 backdrop-blur-sm p-5 mt-8 rounded-2xl shadow-2xl border border-purple-100">
+                <div className="text-base text-gray-600">
+                  Showing <span className="font-bold text-purple-700">{((currentPage - 1) * recipesPerPage) + 1}</span> to <span className="font-bold text-purple-700">{Math.min(currentPage * recipesPerPage, totalRecipesCount)}</span> of <span className="font-bold text-purple-700">{totalRecipesCount}</span> total recipes
+                </div>
         <div className="flex gap-3 items-center">
           <button
             onClick={handlePrevPage}
@@ -746,8 +798,8 @@ const RecipeAdminPortal = () => {
               onChange={(e) => setFormData({ ...formData, source: e.target.value })}
               className="w-full px-4 py-2.5 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-pink-500 focus:border-pink-500 transition duration-150 bg-white appearance-none"
             >
-              <option value="database">Database</option>
-              <option value="api">API</option>
+              <option value="database">cookbook</option>
+              <option value="api">gemini</option>
             </select>
           </div>
           
