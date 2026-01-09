@@ -34,7 +34,7 @@ const RecipeLoginPage = ({ onLoginSuccess }) => {
     
     try {
       // Call backend login endpoint
-      const response = await fetch(`${BASE_URL}/api/admin/login`, {
+      const response = await fetch(`${BASE_URL}/admin/login`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

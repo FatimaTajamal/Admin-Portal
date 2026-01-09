@@ -1308,7 +1308,7 @@ const RecipeAdminPortal = () => {
         category: filterCategory || "all",
       })
 
-      const url = `${BASE_URL}/api/recipes?${params.toString()}`
+      const url = `${BASE_URL}/recipes?${params.toString()}`
       const response = await fetch(url)
 
       if (!response.ok) {
@@ -1342,7 +1342,7 @@ const RecipeAdminPortal = () => {
   const fetchPagedHacks = async () => {
     setIsLoading(true)
     try {
-      const response = await fetch(`${BASE_URL}/api/cooking-hacks`)
+      const response = await fetch(`${BASE_URL}/cooking-hacks`)
 
       if (!response.ok) {
         throw new Error(`Failed to fetch hacks: ${response.status}`)
@@ -1377,7 +1377,7 @@ const RecipeAdminPortal = () => {
 
   const fetchRecipesForStats = async () => {
     try {
-      const url = `${BASE_URL}/api/recipes?page=1&limit=50000`
+      const url = `${BASE_URL}/recipes?page=1&limit=50000`
       const response = await fetch(url)
 
       if (!response.ok) {
@@ -1414,7 +1414,7 @@ const RecipeAdminPortal = () => {
 
   const fetchHacksForStats = async () => {
     try {
-      const response = await fetch(`${BASE_URL}/api/cooking-hacks`)
+      const response = await fetch(`${BASE_URL}/cooking-hacks`)
       if (!response.ok) throw new Error("Failed to fetch hacks for stats")
 
       const result = await response.json()
@@ -1488,7 +1488,7 @@ const RecipeAdminPortal = () => {
     setIsLoading(true)
     try {
       // Get the highest ID
-      const allHacksResponse = await fetch(`${BASE_URL}/api/cooking-hacks`)
+      const allHacksResponse = await fetch(`${BASE_URL}/cooking-hacks`)
       const allHacksResult = await allHacksResponse.json()
       const allHacks = allHacksResult.data || allHacksResult
       const maxId = allHacks.length > 0 ? Math.max(...allHacks.map((h) => h.id || 0)) : 0
@@ -1498,7 +1498,7 @@ const RecipeAdminPortal = () => {
         hack: hackFormData.hack.trim(),
       }
 
-      const response = await fetch(`${BASE_URL}/api/cooking-hacks`, {
+      const response = await fetch(`${BASE_URL}/cooking-hacks`, {
         method: "POST",
         headers: getAuthHeaders(),
         body: JSON.stringify(payload),
@@ -1535,7 +1535,7 @@ const RecipeAdminPortal = () => {
         hack: hackFormData.hack.trim(),
       }
 
-      const response = await fetch(`${BASE_URL}/api/cooking-hacks/${hackId}`, {
+      const response = await fetch(`${BASE_URL}/cooking-hacks/${hackId}`, {
         method: "PUT",
         headers: getAuthHeaders(),
         body: JSON.stringify(payload),
@@ -1570,7 +1570,7 @@ const RecipeAdminPortal = () => {
 
     setIsLoading(true)
     try {
-      const response = await fetch(`${BASE_URL}/api/cooking-hacks/${id}`, {
+      const response = await fetch(`${BASE_URL}/cooking-hacks/${id}`, {
         method: "DELETE",
         headers: getAuthHeaders(),
       })
@@ -1637,7 +1637,7 @@ const RecipeAdminPortal = () => {
         source: formData.source || "cookbook",
       }
 
-      const response = await fetch(`${BASE_URL}/api/recipes`, {
+      const response = await fetch(`${BASE_URL}/recipes`, {
         method: "POST",
         headers: getAuthHeaders(),
         body: JSON.stringify(payload),
@@ -1684,7 +1684,7 @@ const RecipeAdminPortal = () => {
         source: formData.source,
       }
 
-      const response = await fetch(`${BASE_URL}/api/recipes/${recipeId}`, {
+      const response = await fetch(`${BASE_URL}/recipes/${recipeId}`, {
         method: "PUT",
         headers: getAuthHeaders(),
         body: JSON.stringify(payload),
@@ -1719,7 +1719,7 @@ const RecipeAdminPortal = () => {
 
     setIsLoading(true)
     try {
-      const response = await fetch(`${BASE_URL}/api/recipes/${id}`, {
+      const response = await fetch(`${BASE_URL}/recipes/${id}`, {
         method: "DELETE",
         headers: getAuthHeaders(),
       })
@@ -1741,40 +1741,53 @@ const RecipeAdminPortal = () => {
   }
 
   const handleEdit = async (recipe) => {
-    const normalizedRecipe = {
-      ...recipe,
-      name: recipe.name || recipe.title,
-      title: recipe.title || recipe.name,
-    }
-
-    let fullRecipe = normalizedRecipe
-    if (!normalizedRecipe.ingredients || !normalizedRecipe.instructions) {
-      try {
-        const response = await fetch(`${BASE_URL}/api/recipes/${recipe.id}`)
-        if (response.ok) {
-          const fetchedRecipe = await response.json()
-          fullRecipe = {
-            ...fetchedRecipe,
-            id: fetchedRecipe._id || fetchedRecipe.id,
-            name: fetchedRecipe.name || fetchedRecipe.title,
-            title: fetchedRecipe.title || fetchedRecipe.name,
-          }
-        }
-      } catch (error) {
-        console.error("Error fetching full recipe for edit:", error)
-      }
-    }
-
-    setSelectedRecipe(fullRecipe)
-    setFormData({
-      ...fullRecipe,
-      name: fullRecipe.name || fullRecipe.title,
-      ingredients: Array.isArray(fullRecipe.ingredients)
-        ? fullRecipe.ingredients.join(", ")
-        : fullRecipe.ingredients || "",
-    })
-    setCurrentView("edit")
+  const normalizedRecipe = {
+    ...recipe,
+    name: recipe.name || recipe.title,
+    title: recipe.title || recipe.name,
   }
+
+  let fullRecipe = normalizedRecipe
+  if (!normalizedRecipe.ingredients || !normalizedRecipe.instructions) {
+    try {
+      const response = await fetch(`${BASE_URL}/recipes/${recipe.id}`)
+      if (response.ok) {
+        const fetchedRecipe = await response.json()
+        fullRecipe = {
+          ...fetchedRecipe,
+          id: fetchedRecipe._id || fetchedRecipe.id,
+          name: fetchedRecipe.name || fetchedRecipe.title,
+          title: fetchedRecipe.title || fetchedRecipe.name,
+        }
+      }
+    } catch (error) {
+      console.error("Error fetching full recipe for edit:", error)
+    }
+  }
+
+  // Normalize ingredients for the form
+  let ingredientsString = ''
+  if (Array.isArray(fullRecipe.ingredients)) {
+    ingredientsString = fullRecipe.ingredients.map(ing => {
+      if (typeof ing === 'string') {
+        return ing
+      } else if (ing.name) {
+        return ing.quantity ? `${ing.name} - ${ing.quantity}` : ing.name
+      }
+      return ''
+    }).filter(Boolean).join(', ')
+  } else if (fullRecipe.ingredients) {
+    ingredientsString = fullRecipe.ingredients
+  }
+
+  setSelectedRecipe(fullRecipe)
+  setFormData({
+    ...fullRecipe,
+    name: fullRecipe.name || fullRecipe.title,
+    ingredients: ingredientsString
+  })
+  setCurrentView("edit")
+}
 
   const handleView = async (recipe) => {
     const normalizedRecipe = {
@@ -1785,7 +1798,7 @@ const RecipeAdminPortal = () => {
 
     if (!normalizedRecipe.ingredients || !normalizedRecipe.instructions) {
       try {
-        const response = await fetch(`${BASE_URL}/api/recipes/${recipe.id}`)
+        const response = await fetch(`${BASE_URL}/recipes/${recipe.id}`)
         if (response.ok) {
           const fullRecipe = await response.json()
           const normalized = {
@@ -2545,77 +2558,86 @@ const RecipeAdminPortal = () => {
         )}
 
         {currentView === "view" && selectedRecipe && (
-          <div className="p-8 bg-gray-50 min-h-screen">
-            <div className="bg-white rounded-xl shadow-2xl border border-gray-100 p-8 max-w-4xl mx-auto">
-              <h2 className="text-4xl font-bold text-gray-900 mb-4 flex items-center gap-3">
-                <Utensils size={32} className="text-purple-600" />
-                {selectedRecipe.name}
-              </h2>
+  <div className="p-8 bg-gray-50 min-h-screen">
+    <div className="bg-white rounded-xl shadow-2xl border border-gray-100 p-8 max-w-4xl mx-auto">
+      <h2 className="text-4xl font-bold text-gray-900 mb-4 flex items-center gap-3">
+        <Utensils size={32} className="text-purple-600" />
+        {selectedRecipe.name}
+      </h2>
 
-              <div className="mb-6">{getSourceBadge(selectedRecipe.source || "database")}</div>
+      <div className="mb-6">{getSourceBadge(selectedRecipe.source || "database")}</div>
 
-              <div className="mb-8">
-                <h3 className="text-2xl font-bold text-gray-800 mb-4 flex items-center gap-2">
-                  <List size={24} className="text-purple-600" />
-                  Ingredients
-                </h3>
-                <ul className="space-y-2">
-                  {Array.isArray(selectedRecipe.ingredients) ? (
-                    selectedRecipe.ingredients.map((ingredient, index) => (
-                      <li key={index} className="text-gray-700 flex items-start gap-3">
-                        <span className="text-purple-600 font-bold mt-1">•</span>
-                        <span>{ingredient}</span>
-                      </li>
-                    ))
-                  ) : (
-                    <p className="text-gray-500 italic">{selectedRecipe.ingredients || "No ingredients listed"}</p>
-                  )}
-                </ul>
-              </div>
+      <div className="mb-8">
+        <h3 className="text-2xl font-bold text-gray-800 mb-4 flex items-center gap-2">
+          <List size={24} className="text-purple-600" />
+          Ingredients
+        </h3>
+        <ul className="space-y-2">
+          {Array.isArray(selectedRecipe.ingredients) ? (
+            selectedRecipe.ingredients.map((ingredient, index) => {
+              // Handle both string and object formats
+              const ingredientText = typeof ingredient === 'string' 
+                ? ingredient 
+                : ingredient.name 
+                  ? `${ingredient.name}${ingredient.quantity ? ` - ${ingredient.quantity}` : ''}`
+                  : JSON.stringify(ingredient);
+              
+              return (
+                <li key={index} className="text-gray-700 flex items-start gap-3">
+                  <span className="text-purple-600 font-bold mt-1">•</span>
+                  <span>{ingredientText}</span>
+                </li>
+              );
+            })
+          ) : (
+            <p className="text-gray-500 italic">{selectedRecipe.ingredients || "No ingredients listed"}</p>
+          )}
+        </ul>
+      </div>
 
-              <div className="mb-8">
-                <h3 className="text-2xl font-bold text-gray-800 mb-4 flex items-center gap-2">
-                  <CookingPot size={24} className="text-purple-600" />
-                  Instructions
-                </h3>
-                {Array.isArray(selectedRecipe.instructions) ? (
-                  <ol className="space-y-3">
-                    {selectedRecipe.instructions.map((instruction, index) => (
-                      <li key={index} className="text-gray-700 flex gap-3">
-                        <span className="text-purple-600 font-bold min-w-[28px]">{index + 1}.</span>
-                        <span>{instruction}</span>
-                      </li>
-                    ))}
-                  </ol>
-                ) : (
-                  <p className="text-gray-500 italic whitespace-pre-wrap">
-                    {selectedRecipe.instructions || "No instructions listed"}
-                  </p>
-                )}
-              </div>
-
-              <div className="flex gap-4">
-                <button
-                  onClick={() => handleEdit(selectedRecipe)}
-                  className="flex-1 px-6 py-3 bg-gradient-to-r from-green-600 to-emerald-600 text-white font-semibold rounded-lg hover:shadow-lg transition duration-200 flex items-center justify-center gap-2"
-                >
-                  <Edit2 size={18} />
-                  Edit Recipe
-                </button>
-                <button
-                  onClick={() => {
-                    resetForm()
-                    setCurrentView("recipes")
-                  }}
-                  className="flex-1 px-6 py-3 bg-gray-200 text-gray-800 font-semibold rounded-lg hover:bg-gray-300 transition duration-200 flex items-center justify-center gap-2"
-                >
-                  <X size={18} />
-                  Back to Recipes
-                </button>
-              </div>
-            </div>
-          </div>
+      <div className="mb-8">
+        <h3 className="text-2xl font-bold text-gray-800 mb-4 flex items-center gap-2">
+          <CookingPot size={24} className="text-purple-600" />
+          Instructions
+        </h3>
+        {Array.isArray(selectedRecipe.instructions) ? (
+          <ol className="space-y-3">
+            {selectedRecipe.instructions.map((instruction, index) => (
+              <li key={index} className="text-gray-700 flex gap-3">
+                <span className="text-purple-600 font-bold min-w-[28px]">{index + 1}.</span>
+                <span>{instruction}</span>
+              </li>
+            ))}
+          </ol>
+        ) : (
+          <p className="text-gray-500 italic whitespace-pre-wrap">
+            {selectedRecipe.instructions || "No instructions listed"}
+          </p>
         )}
+      </div>
+
+      <div className="flex gap-4">
+        <button
+          onClick={() => handleEdit(selectedRecipe)}
+          className="flex-1 px-6 py-3 bg-gradient-to-r from-green-600 to-emerald-600 text-white font-semibold rounded-lg hover:shadow-lg transition duration-200 flex items-center justify-center gap-2"
+        >
+          <Edit2 size={18} />
+          Edit Recipe
+        </button>
+        <button
+          onClick={() => {
+            resetForm()
+            setCurrentView("recipes")
+          }}
+          className="flex-1 px-6 py-3 bg-gray-200 text-gray-800 font-semibold rounded-lg hover:bg-gray-300 transition duration-200 flex items-center justify-center gap-2"
+        >
+          <X size={18} />
+          Back to Recipes
+        </button>
+      </div>
+    </div>
+  </div>
+)}
       </main>
     </div>
   )
